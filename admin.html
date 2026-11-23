@@ -1,0 +1,43 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Owner Dashboard — Crumbs & Opinions</title><style>
+:root{--cream:#fff7ed;--paper:#fffdf9;--ink:#24201e;--red:#e74435;--yellow:#ffd75e;--muted:#756d67;--line:#eadfd4}
+*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font:15px system-ui,sans-serif}main{width:min(980px,calc(100% - 32px));margin:40px auto}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}h1{font-size:clamp(28px,5vw,44px);margin:0}.muted,small{color:var(--muted)}
+.card{background:var(--paper);border:1.5px solid var(--ink);border-radius:12px;padding:22px;margin:20px 0;box-shadow:4px 4px 0 var(--ink)}
+button{border:1.5px solid var(--ink);background:var(--yellow);padding:11px 16px;border-radius:999px;font-weight:800;cursor:pointer}button.secondary{background:white}button.danger{background:#ffd6d2}
+input,textarea{width:100%;padding:12px;border:1px solid #b9aaa0;border-radius:8px;font:inherit;background:white}textarea{min-height:100px;resize:vertical}label{display:block;font-weight:700;margin:14px 0 6px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.hidden{display:none!important}
+.status{padding:12px;border-radius:8px;background:#fff1c2;margin:12px 0}.review{border-top:1px solid var(--line);padding:16px 0}.review h3{margin:0 0 5px}.review p{white-space:pre-wrap}a{color:var(--red)}
+</style></head><body><main>
+<div class="top"><div><h1>Crumbs & Opinions</h1><p class="muted">Private owner dashboard</p></div><div class="row"><a href="index.html">View website</a><button id="signOut" class="secondary hidden">Sign out</button></div></div>
+<div id="notice" class="status">Connect your Supabase project, then sign in with the authorised Google account.</div>
+<section id="config" class="card"><h2>Connect your website backend</h2><p class="muted">Use the public project URL and anon/publishable key only. Never enter a service-role key.</p>
+<label for="projectUrl">Supabase project URL</label><input id="projectUrl" placeholder="https://YOUR_PROJECT.supabase.co">
+<label for="anonKey">Supabase anon / publishable key</label><input id="anonKey" placeholder="Public anon key"><button id="saveConfig">Save connection on this device</button></section>
+<section id="login" class="card hidden"><h2>Owner sign-in</h2><p>Sign in with the authorised Google account.</p><button id="googleLogin">Continue with Google</button></section>
+<div id="dashboard" class="hidden"><section class="card"><h2>Edit homepage</h2><p class="muted">Changes appear on the public homepage after saving.</p>
+<label for="headline">Main headline</label><textarea id="headline"></textarea><label for="intro">Introduction</label><textarea id="intro"></textarea><button id="publish">Save & publish homepage</button></section>
+<section class="card"><div class="top"><h2>Community reviews</h2><button id="refresh" class="secondary">Refresh</button></div><p class="muted">Approve reviews to show them publicly.</p><div id="reviews"></div></section></div>
+</main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="document.getElementById('notice').textContent='Could not load the Supabase library. Check your internet connection or try again later.'"></script><script>
+const OWNER_EMAIL="crumbsopinion@gmail.com", $=id=>document.getElementById(id);let supabase,apiUrl,anonKey,session;
+function say(s){$("notice").textContent=s}function cfg(){return{url:localStorage.getItem("crumbsSupabaseUrl")||"",key:localStorage.getItem("crumbsSupabaseAnonKey")||""}}
+function init(){const c=cfg();$("projectUrl").value=c.url;$("anonKey").value=c.key;if(!c.url||!c.key)return;
+try{
+if(!window.supabase||typeof window.supabase.createClient!=="function")throw Error("The Supabase library did not load. Refresh this page; if it continues, check whether your network or browser is blocking cdn.jsdelivr.net.");
+apiUrl=c.url.replace(/\/$/,"")+"/functions/v1/reviews";anonKey=c.key;supabase=window.supabase.createClient(c.url,c.key);
+$("config").classList.add("hidden");$("login").classList.remove("hidden");
+supabase.auth.getSession().then(({data})=>{session=data.session;renderAuth()}).catch(e=>say("Could not check sign-in session: "+e.message));supabase.auth.onAuthStateChange((_e,s)=>{session=s;renderAuth()});
+}catch(e){$("config").classList.remove("hidden");$("login").classList.add("hidden");say("Connection setup failed: "+e.message)}
+}
+function renderAuth(){const owner=session?.user?.email?.toLowerCase()===OWNER_EMAIL;$("login").classList.toggle("hidden",!!session);$("dashboard").classList.toggle("hidden",!owner);$("signOut").classList.toggle("hidden",!session);
+if(session&&!owner)say("This account is not the configured owner. Sign out and use the authorised Gmail account.");if(owner){say("Signed in as "+session.user.email);loadContent();loadReviews()}}
+async function call(action,method="GET",body){const r=await fetch(apiUrl+"?action="+action,{method,headers:{apikey:anonKey,Authorization:"Bearer "+session.access_token,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||"Request failed");return d}
+async function loadContent(){try{const d=await call("content");$("headline").value=d.content?.headline||"";$("intro").value=d.content?.intro||""}catch(e){say(e.message)}}
+async function loadReviews(){try{const d=await call("admin_reviews");$("reviews").innerHTML="";if(!d.reviews.length){$("reviews").textContent="No community reviews yet.";return}
+d.reviews.forEach(r=>{const el=document.createElement("article");el.className="review";const h=document.createElement("h3");h.textContent=r.title||r.restaurant;const meta=document.createElement("small");meta.textContent=`${r.restaurant} · ${r.location} · ${r.rating}/10 · ${r.status}`;const p=document.createElement("p");p.textContent=r.polished_review||r.original_review;const orig=document.createElement("p");orig.textContent="Original notes: "+r.original_review;const controls=document.createElement("div");controls.className="row";
+[["Approve","approved",""],["Reject","rejected","danger"],["Set pending","pending","secondary"]].forEach(([label,status,cls])=>{const b=document.createElement("button");b.textContent=label;if(cls)b.classList.add(cls);b.onclick=async()=>{try{await call("moderate","POST",{id:r.id,status});say("Review updated.");loadReviews()}catch(e){say(e.message)}};controls.appendChild(b)});el.append(h,meta,p,orig,controls);$("reviews").appendChild(el)})}catch(e){say(e.message)}}
+$("saveConfig").onclick=()=>{try{const url=$("projectUrl").value.trim(),key=$("anonKey").value.trim();if(!/^https:\/\/.+\.supabase\.co$/.test(url)||!key){say("Enter a valid Supabase URL and public anon key.");return}localStorage.setItem("crumbsSupabaseUrl",url);localStorage.setItem("crumbsSupabaseAnonKey",key);init()}catch(e){say("Could not save the connection: "+e.message)}};
+$("googleLogin").onclick=async()=>{try{await supabase.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.href}})}catch(e){say(e.message)}};
+$("signOut").onclick=async()=>{await supabase.auth.signOut();session=null;renderAuth()};
+$("publish").onclick=async()=>{try{await call("save_content","POST",{headline:$("headline").value,intro:$("intro").value});say("Homepage saved and published.")}catch(e){say(e.message)}};
+$("refresh").onclick=loadReviews;init();
+</script></body></html>
