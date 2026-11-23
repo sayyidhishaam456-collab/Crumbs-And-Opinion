@@ -1,0 +1,3 @@
+Google Drive backup target folder ID: 1vcjn7RlX3I36YQ0hFa1-u6ew52LWJuFB
+Folder URL: https://drive.google.com/drive/folders/1vcjn7RlX3I36YQ0hFa1-u6ew52LWJuFB
+Keep this folder private. Share it only with the backend service account email as Editor. Never commit credentials.
